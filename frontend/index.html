@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YouTube Transcript Search</title>
+    <style>
+      :root {
+        --bg: #0f0f0f;
+        --panel: #161616;
+        --panel-2: #1f1f1f;
+        --text: #f1f1f1;
+        --muted: #b0b0b0;
+        --border: #2a2a2a;
+        --accent: #3ea6ff;
+        --accent-2: #f7df1e;
+        --error: #cb2431;
+        --ok: #2ea44f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .wrap {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 18px;
+      }
+
+      .top-bar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        padding: 14px 0 10px;
+        background: linear-gradient(to bottom, rgba(15, 15, 15, 0.96) 0%, rgba(15, 15, 15, 0) 100%);
+      }
+
+      .search-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .search-row input[type="text"] {
+        flex: 1;
+        padding: 12px 14px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        color: var(--text);
+        outline: none;
+      }
+
+      .search-row input[type="text"]::placeholder {
+        color: var(--muted);
+      }
+
+      .btn {
+        background: var(--accent);
+        border: 0;
+        color: #fff;
+        border-radius: 10px;
+        padding: 12px 14px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+
+      .btn.secondary {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text);
+      }
+
+      .btn:hover {
+        filter: brightness(1.05);
+      }
+
+      .filters {
+        margin-top: 12px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .filters select {
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        color: var(--text);
+        outline: none;
+      }
+
+      .filters label {
+        color: var(--muted);
+        font-size: 13px;
+        margin-right: 2px;
+      }
+
+      .subrow {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .grid {
+        margin-top: 16px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      @media (max-width: 900px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+      }
+
+      .card-header {
+        padding: 12px 12px 10px;
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+      }
+
+      .thumb {
+        width: 160px;
+        height: 90px;
+        object-fit: cover;
+        border-radius: 10px;
+        background: #000;
+      }
+
+      .card-title {
+        font-size: 16px;
+        font-weight: 700;
+        margin: 2px 0 6px;
+        line-height: 1.25;
+      }
+
+      .card-title a {
+        color: var(--text);
+        text-decoration: none;
+      }
+
+      .card-title a:hover {
+        color: var(--accent);
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 13px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .segments {
+        padding: 0 12px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .seg {
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px 10px;
+      }
+
+      .seg-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+
+      .ts {
+        flex: 0 0 auto;
+        min-width: 64px;
+        padding: 6px 8px;
+        border-radius: 999px;
+        background: rgba(62, 166, 255, 0.15);
+        color: var(--accent);
+        font-weight: 700;
+        font-size: 12px;
+        text-align: center;
+      }
+
+      .seg-text {
+        flex: 1;
+        color: var(--text);
+        font-size: 13px;
+        line-height: 1.4;
+      }
+
+      .seg-text .hl {
+        font-weight: 800;
+        background: var(--accent-2);
+        color: #000;
+        padding: 0 2px;
+        border-radius: 3px;
+      }
+
+      .seg-actions {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .linkbtn {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 10px;
+        padding: 8px 10px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 13px;
+      }
+
+      .linkbtn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .status {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .empty {
+        margin-top: 30px;
+        padding: 20px;
+        border: 1px dashed var(--border);
+        border-radius: 14px;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .statsbar {
+        margin-top: 18px;
+        padding: 14px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .error {
+        color: var(--error);
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="top-bar">
+        <div class="search-row">
+          <input id="q" type="text" placeholder="Search in indexed YouTube transcripts..." autocomplete="off" />
+          <button class="btn" id="searchBtn" type="button">Search</button>
+        </div>
+
+        <div class="filters">
+          <div>
+            <label for="channelSel">Channel</label>
+            <select id="channelSel">
+              <option value="">All</option>
+            </select>
+          </div>
+          <div>
+            <label for="sortSel">Sort</label>
+            <select id="sortSel">
+              <option value="relevance">Relevance</option>
+              <option value="date">Date indexed</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="subrow" id="subrow">Loading stats...</div>
+      </div>
+
+      <div id="resultsArea"></div>
+
+      <div class="statsbar" id="statsBar"></div>
+    </div>
+
+    <script>
+      const API_BASE = "/api";
+
+      const qEl = document.getElementById("q");
+      const searchBtn = document.getElementById("searchBtn");
+      const channelSel = document.getElementById("channelSel");
+      const sortSel = document.getElementById("sortSel");
+      const resultsArea = document.getElementById("resultsArea");
+      const subrow = document.getElementById("subrow");
+      const statsBar = document.getElementById("statsBar");
+
+      let lastStats = null;
+
+      function escapeHtml(text) {
+        const t = document.createElement("div");
+        t.textContent = text == null ? "" : String(text);
+        return t.innerHTML;
+      }
+
+      function escapeRegex(s) {
+        return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }
+
+      function termsFromQuery(query) {
+        return String(query)
+          .toLowerCase()
+          .split(/\s+/)
+          .map((t) => t.replace(/[^a-z0-9]/g, "").trim())
+          .filter((t) => t.length >= 3);
+      }
+
+      function highlightText(text, terms) {
+        if (!terms || terms.length === 0) return escapeHtml(text);
+        let html = escapeHtml(text);
+        for (const term of terms) {
+          const re = new RegExp("(" + escapeRegex(term) + ")", "gi");
+          html = html.replace(re, '<span class="hl">$1</span>');
+        }
+        return html;
+      }
+
+      function formatTime(seconds) {
+        const s = Math.floor(Number(seconds) || 0);
+        const m = Math.floor(s / 60);
+        const h = Math.floor(m / 60);
+        const remM = m % 60;
+        const remS = s % 60;
+        let res = remM.toString().padStart(2, "0") + ":" + remS.toString().padStart(2, "0");
+        if (h > 0) res = h + ":" + res;
+        return res;
+      }
+
+      function makeSegmentElement(video, seg, terms) {
+        const ts = formatTime(seg.time);
+        const openUrl = `${video.url}&t=${Math.floor(seg.time)}s`;
+        const copyUrl = openUrl;
+        const segHtml = document.createElement("div");
+        segHtml.className = "seg";
+        segHtml.innerHTML = `
+          <div class="seg-row">
+            <div class="ts">${ts}</div>
+            <div class="seg-text">${highlightText(seg.text, terms)}</div>
+          </div>
+          <div class="seg-actions">
+            <button class="linkbtn" type="button" data-open="${escapeHtml(openUrl)}">▶ Open at time</button>
+            <button class="linkbtn" type="button" data-copy="${escapeHtml(copyUrl)}">🔗 Copy link</button>
+          </div>
+        `;
+        segHtml.querySelectorAll("[data-open]").forEach((b) => {
+          b.addEventListener("click", () => window.open(b.getAttribute("data-open"), "_blank", "noopener,noreferrer"));
+        });
+        segHtml.querySelectorAll("[data-copy]").forEach((b) => {
+          b.addEventListener("click", async () => {
+            const url = b.getAttribute("data-copy");
+            try {
+              await navigator.clipboard.writeText(url);
+              b.textContent = "Copied";
+              setTimeout(() => (b.textContent = "🔗 Copy link"), 1100);
+            } catch (e) {
+              alert("Clipboard write failed. Copy manually: " + url);
+            }
+          });
+        });
+        return segHtml;
+      }
+
+      function makeVideoCard(video, terms) {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const segs = (video.segments || []).slice(0, 5);
+        card.innerHTML = `
+          <div class="card-header">
+            <img class="thumb" src="${escapeHtml(video.thumbnail)}" alt="" onerror="this.style.display='none'">
+            <div style="min-width:0; flex:1;">
+              <div class="card-title">
+                <a href="${escapeHtml(video.url)}" target="_blank" rel="noopener">${escapeHtml(video.title)}</a>
+              </div>
+              <div class="meta">
+                <span><b>Channel:</b> ${escapeHtml(video.channel)}</span>
+              </div>
+            </div>
+          </div>
+          <div class="segments"></div>
+        `;
+
+        const segmentsEl = card.querySelector(".segments");
+        for (const seg of segs) segmentsEl.appendChild(makeSegmentElement(video, seg, terms));
+        return card;
+      }
+
+      function renderEmpty(message) {
+        resultsArea.innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
+      }
+
+      async function loadStats() {
+        subrow.textContent = "Loading stats...";
+        try {
+          const res = await fetch(API_BASE + "/stats");
+          const data = await res.json();
+          lastStats = data;
+
+          channelSel.innerHTML = '<option value="">All</option>' + (data.channels || []).map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+
+          statsBar.innerHTML = `
+            <div><b>${data.video_count}</b> videos indexed</div>
+            <div><b>${data.total_segments}</b> total segments</div>
+            <div>Last rebuild: <b>${escapeHtml(data.last_rebuild_time || "")}</b></div>
+          `;
+          subrow.textContent = "Type a query, optionally filter by channel, then search.";
+        } catch (e) {
+          subrow.innerHTML = `<span class="error">Failed to load stats. Start the backend.</span>`;
+        }
+      }
+
+      async function performSearch() {
+        const query = qEl.value.trim();
+        if (!query) return;
+
+        resultsArea.innerHTML = `<div class="empty">Searching for “${escapeHtml(query)}”…</div>`;
+
+        const channel = channelSel.value;
+        const sort = sortSel.value;
+
+        try {
+          const url = new URL(API_BASE + "/search", window.location.origin);
+          url.searchParams.set("q", query);
+          url.searchParams.set("channel", channel);
+          url.searchParams.set("limit", "20");
+
+          const res = await fetch(url.toString());
+          const data = await res.json();
+
+          if (!res.ok || data.error) {
+            renderEmpty("Error: " + (data.error || "unknown"));
+            return;
+          }
+
+          let videos = data.results || [];
+          const terms = termsFromQuery(query);
+
+          if (sort === "date") {
+            videos = videos.slice().sort((a, b) => {
+              const da = Date.parse(a.indexed_at || "") || 0;
+              const db = Date.parse(b.indexed_at || "") || 0;
+              return db - da;
+            });
+          }
+
+          if (videos.length === 0) {
+            renderEmpty("No results found. Try different keywords or add more videos to the index.");
+            return;
+          }
+
+          resultsArea.innerHTML = "";
+          for (const video of videos) {
+            resultsArea.appendChild(makeVideoCard(video, terms));
+          }
+        } catch (e) {
+          resultsArea.innerHTML = `<div class="empty">Connection error. Start backend on localhost:5000.</div>`;
+        }
+      }
+
+      searchBtn.addEventListener("click", performSearch);
+      qEl.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") performSearch();
+      });
+
+      // Initial load
+      loadStats();
+    </script>
+  </body>
+</html>
+

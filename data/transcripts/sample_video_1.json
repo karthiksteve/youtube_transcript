@@ -1,0 +1,70 @@
+{
+  "video_id": "sample_video_1",
+  "title": "Introduction to Machine Learning",
+  "channel": "AI Education",
+  "description": "Learn the basics of machine learning and neural networks",
+  "segment_count": 15,
+  "indexed_at": "2026-03-21 15:56:15",
+  "segments": [
+    {
+      "time": 0.0,
+      "text": "Welcome to this introduction to machine learning"
+    },
+    {
+      "time": 5.0,
+      "text": "Today we will cover the basics of artificial intelligence"
+    },
+    {
+      "time": 12.0,
+      "text": "Machine learning is a subset of artificial intelligence"
+    },
+    {
+      "time": 20.0,
+      "text": "The key idea is that computers can learn from data"
+    },
+    {
+      "time": 28.0,
+      "text": "Neural networks are inspired by the human brain"
+    },
+    {
+      "time": 35.0,
+      "text": "Deep learning uses multiple layers of neural networks"
+    },
+    {
+      "time": 42.0,
+      "text": "Supervised learning uses labeled training data"
+    },
+    {
+      "time": 50.0,
+      "text": "Unsupervised learning finds patterns in unlabeled data"
+    },
+    {
+      "time": 58.0,
+      "text": "Reinforcement learning learns through trial and error"
+    },
+    {
+      "time": 65.0,
+      "text": "Classification assigns labels to input data"
+    },
+    {
+      "time": 72.0,
+      "text": "Regression predicts continuous numerical values"
+    },
+    {
+      "time": 80.0,
+      "text": "Clustering groups similar data points together"
+    },
+    {
+      "time": 88.0,
+      "text": "Natural language processing handles text and speech"
+    },
+    {
+      "time": 95.0,
+      "text": "Computer vision processes and understands images"
+    },
+    {
+      "time": 105.0,
+      "text": "Thanks for watching this introduction to machine learning"
+    }
+  ]
+}

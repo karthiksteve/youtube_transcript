@@ -1,0 +1,50 @@
+{
+  "video_id": "sample_video_3",
+  "title": "Web Development with HTML CSS and JavaScript",
+  "channel": "Web Dev Simplified",
+  "description": "Complete web development guide",
+  "segment_count": 10,
+  "indexed_at": "2026-03-21 15:56:15",
+  "segments": [
+    {
+      "time": 0.0,
+      "text": "Today we will learn web development from scratch"
+    },
+    {
+      "time": 8.0,
+      "text": "HTML is the structure of a web page"
+    },
+    {
+      "time": 16.0,
+      "text": "CSS controls the visual styling and layout"
+    },
+    {
+      "time": 24.0,
+      "text": "JavaScript adds interactivity to websites"
+    },
+    {
+      "time": 32.0,
+      "text": "Responsive design makes sites work on all devices"
+    },
+    {
+      "time": 40.0,
+      "text": "DOM manipulation changes page content dynamically"
+    },
+    {
+      "time": 50.0,
+      "text": "APIs allow your website to communicate with servers"
+    },
+    {
+      "time": 60.0,
+      "text": "Frameworks like React and Vue simplify development"
+    },
+    {
+      "time": 70.0,
+      "text": "Version control with Git helps track changes"
+    },
+    {
+      "time": 80.0,
+      "text": "Deploy your website to share it with the world"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>YouTube Transcript Search</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="header">
+      <div class="title-row">
+        <div class="title">Transcript Search</div>
+        <div class="api-pill" id="apiPill" title="Backend status">
+          <span class="dot" id="apiDot"></span>
+          <span class="api-text" id="apiText">Offline</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabs" role="tablist" aria-label="Search mode">
+      <button class="tab-btn active" type="button" data-mode="current" role="tab" aria-selected="true">Current video</button>
+      <button class="tab-btn" type="button" data-mode="all" role="tab" aria-selected="false">Search all</button>
+    </div>
+
+    <div class="search-row">
+      <input id="query" type="text" placeholder="Search transcript..." autocomplete="off" />
+      <button id="searchBtn" class="search-btn" type="button" aria-label="Search">Search</button>
+    </div>
+
+    <div class="meta-row">
+      <div class="match-count" id="matchCount"></div>
+    </div>
+
+    <div class="results" id="results"></div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
+

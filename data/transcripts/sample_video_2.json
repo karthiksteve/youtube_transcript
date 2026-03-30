@@ -1,0 +1,58 @@
+{
+  "video_id": "sample_video_2",
+  "title": "Python Programming Tutorial for Beginners",
+  "channel": "Code Academy",
+  "description": "Learn Python programming from scratch",
+  "segment_count": 12,
+  "indexed_at": "2026-03-21 15:56:15",
+  "segments": [
+    {
+      "time": 0.0,
+      "text": "Welcome to the Python programming tutorial"
+    },
+    {
+      "time": 8.0,
+      "text": "Python is one of the most popular programming languages"
+    },
+    {
+      "time": 15.0,
+      "text": "Let us start by installing Python on your computer"
+    },
+    {
+      "time": 25.0,
+      "text": "Variables store data in your program"
+    },
+    {
+      "time": 32.0,
+      "text": "Data types include strings integers and floats"
+    },
+    {
+      "time": 40.0,
+      "text": "Functions are reusable blocks of code"
+    },
+    {
+      "time": 48.0,
+      "text": "Loops allow you to repeat code multiple times"
+    },
+    {
+      "time": 55.0,
+      "text": "Lists are ordered collections of items"
+    },
+    {
+      "time": 63.0,
+      "text": "Dictionaries store key value pairs"
+    },
+    {
+      "time": 72.0,
+      "text": "Object oriented programming organizes code into classes"
+    },
+    {
+      "time": 82.0,
+      "text": "Error handling uses try except blocks"
+    },
+    {
+      "time": 90.0,
+      "text": "Practice makes perfect keep coding every day"
+    }
+  ]
+}
