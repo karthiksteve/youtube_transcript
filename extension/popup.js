@@ -20,127 +20,20 @@ function formatTime(seconds) {
 }
 
 const STOP_WORDS = new Set([
-  "i",
-  "me",
-  "my",
-  "myself",
-  "we",
-  "our",
-  "ours",
-  "ourselves",
-  "you",
-  "you're",
-  "you've",
-  "you'll",
-  "you'd",
-  "your",
-  "yours",
-  "yourself",
-  "yourselves",
-  "he",
-  "him",
-  "his",
-  "she",
-  "her",
-  "it",
-  "its",
-  "they",
-  "them",
-  "their",
-  "theirs",
-  "what",
-  "which",
-  "who",
-  "whom",
-  "this",
-  "that",
-  "these",
-  "those",
-  "a",
-  "an",
-  "the",
-  "and",
-  "but",
-  "if",
-  "or",
-  "because",
-  "as",
-  "until",
-  "while",
-  "of",
-  "at",
-  "by",
-  "for",
-  "with",
-  "about",
-  "against",
-  "between",
-  "into",
-  "through",
-  "during",
-  "before",
-  "after",
-  "above",
-  "below",
-  "to",
-  "from",
-  "up",
-  "down",
-  "in",
-  "out",
-  "on",
-  "off",
-  "over",
-  "under",
-  "again",
-  "further",
-  "then",
-  "once",
-  "here",
-  "there",
-  "when",
-  "where",
-  "why",
-  "how",
-  "all",
-  "any",
-  "each",
-  "few",
-  "more",
-  "most",
-  "other",
-  "some",
-  "such",
-  "no",
-  "nor",
-  "not",
-  "only",
-  "own",
-  "same",
-  "so",
-  "than",
-  "too",
-  "very",
-  "can",
-  "will",
-  "just",
-  "don",
-  "don't",
-  "should",
-  "now",
-  "d",
-  "ll",
-  "m",
-  "o",
-  "re",
-  "ve",
-  "y",
-  "aren",
-  "isn",
-  "wasn",
-  "weren",
-  "won",
-  "wouldn",
+  "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you",
+  "you're", "you've", "you'll", "you'd", "your", "yours", "yourself",
+  "yourselves", "he", "him", "his", "she", "her", "it", "its", "they",
+  "them", "their", "theirs", "what", "which", "who", "whom", "this",
+  "that", "these", "those", "a", "an", "the", "and", "but", "if", "or",
+  "because", "as", "until", "while", "of", "at", "by", "for", "with",
+  "about", "against", "between", "into", "through", "during", "before",
+  "after", "above", "below", "to", "from", "up", "down", "in", "out",
+  "on", "off", "over", "under", "again", "further", "then", "once",
+  "here", "there", "when", "where", "why", "how", "all", "any", "each",
+  "few", "more", "most", "other", "some", "such", "no", "nor", "not",
+  "only", "own", "same", "so", "than", "too", "very", "can", "will",
+  "just", "don", "don't", "should", "now", "d", "ll", "m", "o", "re",
+  "ve", "y", "aren", "isn", "wasn", "weren", "won", "wouldn",
 ]);
 
 function tokenize(text) {
@@ -179,11 +72,38 @@ function sendMessageWithRetry(tabId, message, attempts = 20, delayMs = 250) {
   });
 }
 
+function extractVideoId(input) {
+  if (!input) return null;
+  const s = String(input).trim();
+  
+  // Direct video ID (11 characters)
+  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
+  
+  // YouTube URLs
+  const patterns = [
+    /[?&]v=([a-zA-Z0-9_-]{11})/,
+    /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = s.match(pattern);
+    if (match) return match[1];
+  }
+  
+  return null;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const queryEl = document.getElementById("query");
   const searchBtn = document.getElementById("searchBtn");
   const resultsEl = document.getElementById("results");
   const matchCountEl = document.getElementById("matchCount");
+  const fetchRow = document.getElementById("fetchRow");
+  const searchRow = document.getElementById("searchRow");
+  const videoUrlEl = document.getElementById("videoUrl");
+  const fetchBtn = document.getElementById("fetchBtn");
 
   const apiPill = document.getElementById("apiPill");
   const apiDot = document.getElementById("apiDot");
@@ -196,6 +116,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let currentTranscript = null;
   let currentVideoId = null;
+  let currentVideoTitle = null;
 
   function setApiStatus(online) {
     apiPill.classList.remove("online", "offline");
@@ -230,6 +151,49 @@ document.addEventListener("DOMContentLoaded", () => {
 
     currentTranscript = response.transcript || [];
     currentVideoId = response.videoId || null;
+    currentVideoTitle = response.title || null;
+  }
+
+  async function indexCurrentVideoToBackend() {
+    if (!currentVideoId || !Array.isArray(currentTranscript) || currentTranscript.length === 0) {
+      throw new Error("Could not read transcript from current video.");
+    }
+
+    const doc = {
+      video_id: currentVideoId,
+      title: currentVideoTitle || `Video ${currentVideoId}`,
+      segments: currentTranscript,
+    };
+
+    const response = await chrome.runtime.sendMessage({
+      action: "INDEX_VIDEO",
+      doc,
+    });
+
+    if (!response?.success) {
+      throw new Error(response?.error || "Failed to index current video transcript.");
+    }
+  }
+
+  async function searchCurrentVideoViaApi(query) {
+    if (!apiAvailable) throw new Error("Backend offline. Start the Flask server.");
+
+    await loadCurrent();
+    if (!currentVideoId) throw new Error("Could not detect current YouTube video ID.");
+
+    await indexCurrentVideoToBackend();
+
+    const response = await chrome.runtime.sendMessage({
+      action: "SEARCH_VIDEO",
+      videoId: currentVideoId,
+      query,
+      limit: 25,
+    });
+
+    if (!response?.success) {
+      throw new Error(response?.error || "Search failed.");
+    }
+    return response.data;
   }
 
   function localSearch(query) {
@@ -252,7 +216,6 @@ document.addEventListener("DOMContentLoaded", () => {
           if (matches) score += matches.length;
         }
 
-        // light normalization: prefer earlier segments when equal
         return { segment: seg, score, time: seg.time };
       })
       .filter((x) => x.score > 0);
@@ -302,7 +265,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function searchAll(query) {
-    if (!apiAvailable) throw new Error("Backend offline. Open settings to configure API.");
+    if (!apiAvailable) throw new Error("Backend offline. Start the Flask server.");
     const response = await chrome.runtime.sendMessage({
       action: "SEARCH",
       query,
@@ -340,8 +303,8 @@ document.addEventListener("DOMContentLoaded", () => {
               </div>
               <div class="seg-text">${highlightText(seg.text, terms)}</div>
               <div class="actions">
-                <a class="mini-btn primary" href="${escapeHtml(jumpUrl)}" target="_blank" rel="noopener">▶ Jump</a>
-                <button class="mini-btn" type="button" data-copy="${escapeHtml(jumpUrl)}">🔗 Copy</button>
+                <a class="mini-btn primary" href="${escapeHtml(jumpUrl)}" target="_blank" rel="noopener">Jump</a>
+                <button class="mini-btn" type="button" data-copy="${escapeHtml(jumpUrl)}">Copy link</button>
               </div>
             </div>
           `;
@@ -369,7 +332,7 @@ document.addEventListener("DOMContentLoaded", () => {
             btn.textContent = "Copied";
             btn.classList.add("copied");
             setTimeout(() => {
-              btn.textContent = "🔗 Copy";
+              btn.textContent = "Copy link";
               btn.classList.remove("copied");
             }, 1200);
           } catch (e) {
@@ -382,6 +345,82 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  async function fetchVideoTranscript() {
+    const urlInput = videoUrlEl.value.trim();
+    if (!urlInput) throw new Error("Enter a YouTube URL or video ID.");
+
+    const videoId = extractVideoId(urlInput);
+    if (!videoId) throw new Error("Invalid YouTube URL or video ID.");
+
+    resultsEl.innerHTML = '<div class="loading">Fetching transcript from YouTube...</div>';
+    matchCountEl.textContent = "";
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: "FETCH_VIDEO",
+        videoId,
+      });
+
+      if (!response?.success) {
+        throw new Error(response?.error || "Failed to fetch transcript.");
+      }
+
+      const data = response.data;
+      renderFetchResult(data, videoId);
+    } catch (e) {
+      resultsEl.innerHTML = `<div class="error">${escapeHtml(e.message || String(e))}</div>`;
+    }
+  }
+
+  function renderFetchResult(data, videoId) {
+    resultsEl.innerHTML = "";
+    
+    if (!data.segments || data.segments.length === 0) {
+      resultsEl.innerHTML = '<div class="error">No transcript found for this video.</div>';
+      return;
+    }
+
+    matchCountEl.textContent = `${data.segments.length} segments fetched`;
+
+    const card = document.createElement("div");
+    card.className = "video-card";
+
+    const thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+    const previewSegments = data.segments.slice(0, 5);
+    const segHtml = previewSegments
+      .map((seg) => {
+        const ts = formatTime(seg.time);
+        const jumpUrl = `${videoUrl}&t=${Math.floor(seg.time)}s`;
+        return `
+          <div class="seg-item">
+            <div class="seg-top">
+              <a href="${escapeHtml(jumpUrl)}" target="_blank" rel="noopener" class="ts">${escapeHtml(ts)}</a>
+            </div>
+            <div class="seg-text">${escapeHtml(seg.text)}</div>
+          </div>
+        `;
+      })
+      .join("");
+
+    card.innerHTML = `
+      <div class="video-row">
+        <img class="video-thumb" src="${escapeHtml(thumbnail)}" alt="" onerror="this.style.display='none'"/>
+        <div style="flex:1; min-width:0;">
+          <div class="video-title">
+            <a href="${escapeHtml(videoUrl)}" target="_blank" rel="noopener">${escapeHtml(data.title || `Video ${videoId}`)}</a>
+          </div>
+          <div class="video-meta">${data.segments.length} segments indexed</div>
+          <div class="fetch-status success">Transcript indexed successfully! Search this video using "Search all" mode.</div>
+          ${segHtml}
+        </div>
+      </div>
+    `;
+
+    resultsEl.appendChild(card);
+  }
+
   async function runSearch() {
     const query = queryEl.value.trim();
     if (!query) return;
@@ -391,11 +430,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       if (currentMode === "current") {
-        if (!currentTranscript) {
-          await loadCurrent();
-        }
-        const results = localSearch(query);
-        renderCurrentResults(results, query);
+        const data = await searchCurrentVideoViaApi(query);
+        renderCurrentResults(data.results || [], query);
       } else {
         const data = await searchAll(query);
         renderAllResults(data, query);
@@ -405,18 +441,35 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Tab switching
   tabButtons.forEach((btn) => {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", () => {
       tabButtons.forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-      currentMode = btn.dataset.mode === "current" ? "current" : "all";
+      currentMode = btn.dataset.mode;
 
       currentTranscript = null;
       currentVideoId = null;
 
       queryEl.value = "";
+      videoUrlEl.value = "";
       matchCountEl.textContent = "";
-      resultsEl.innerHTML = `<div class="placeholder">${currentMode === "current" ? "Load a transcript to search." : "Type to search your indexed library."}</div>`;
+
+      if (currentMode === "fetch") {
+        searchRow.style.display = "none";
+        fetchRow.style.display = "flex";
+        resultsEl.innerHTML = '<div class="placeholder">Enter a YouTube URL to fetch its transcript.</div>';
+      } else {
+        searchRow.style.display = "flex";
+        fetchRow.style.display = "none";
+        if (currentMode === "current") {
+          resultsEl.innerHTML = '<div class="placeholder">Load a transcript to search.</div>';
+        } else {
+          resultsEl.innerHTML = apiAvailable 
+            ? '<div class="placeholder">Type to search your indexed library.</div>'
+            : '<div class="error">Backend offline. Start the Flask server.</div>';
+        }
+      }
     });
   });
 
@@ -425,9 +478,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Enter") runSearch();
   });
 
+  fetchBtn.addEventListener("click", () => fetchVideoTranscript());
+  videoUrlEl.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") fetchVideoTranscript();
+  });
+
   checkApi();
 
   // initial placeholder
   resultsEl.innerHTML = '<div class="placeholder">Type to search in the current video.</div>';
 });
-

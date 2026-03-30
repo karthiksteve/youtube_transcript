@@ -10,6 +10,7 @@ from flask_cors import CORS
 
 from db import TranscriptsDB
 from search import TFIDFIndex
+from indexer import get_captions, get_video_metadata, extract_video_id
 
 
 def json_error(message: str, code: str, http_status: int) -> tuple[Any, int]:
@@ -142,8 +143,16 @@ def api_search_within_video(video_id: str) -> Any:
     if not q:
         return json_error('Missing required query param "q".', "MISSING_QUERY", 400)
 
+    limit_raw = request.args.get("limit")
     try:
-        segments = index.search_within_video(video_id=video_id, query=q, top_k_segments=10)
+        limit = int(limit_raw) if limit_raw is not None else 10
+    except ValueError:
+        return json_error('Invalid "limit" parameter. Must be an integer.', "INVALID_LIMIT", 400)
+
+    limit = max(1, min(50, limit))
+
+    try:
+        segments = index.search_within_video(video_id=video_id, query=q, top_k_segments=limit)
     except Exception as e:
         return json_error(f"Search within video failed: {e}", "SEARCH_FAILED", 500)
 
@@ -257,6 +266,182 @@ def api_rebuild_index() -> Any:
         )
     except Exception as e:
         return json_error(f"Index rebuild failed: {e}", "REBUILD_FAILED", 500)
+
+
+# ============ NEW: Dynamic transcript fetching endpoints ============
+
+@app.post("/api/fetch")
+def api_fetch_transcript() -> Any:
+    """
+    Fetch and index a transcript from YouTube for any video.
+    
+    Request body:
+      {"video_url": "https://www.youtube.com/watch?v=VIDEO_ID"}
+      or
+      {"video_id": "VIDEO_ID"}
+    
+    This fetches the transcript directly from YouTube and adds it to the index.
+    """
+    data: Optional[Dict[str, Any]] = request.get_json(silent=True)
+    if not data:
+        return json_error("Missing JSON body.", "INVALID_BODY", 400)
+
+    video_url_or_id = data.get("video_url") or data.get("video_id") or ""
+    if not video_url_or_id:
+        return json_error('Body must include "video_url" or "video_id".', "MISSING_VIDEO_ID", 400)
+
+    video_id = extract_video_id(str(video_url_or_id))
+    if not video_id:
+        return json_error("Could not extract a valid video ID.", "INVALID_VIDEO_ID", 400)
+
+    # Check if already indexed
+    existing = db.get_one(video_id)
+    if existing:
+        return jsonify({
+            "status": "already_indexed",
+            "video_id": video_id,
+            "title": existing.get("title"),
+            "segment_count": len(existing.get("segments") or []),
+            "segments": existing.get("segments") or [],
+            "timestamp": now_iso()
+        })
+
+    try:
+        # Fetch captions from YouTube
+        segments = get_captions(video_id)
+        if not segments:
+            return json_error(
+                f"No captions found for video {video_id}. The video may not have captions enabled.",
+                "NO_CAPTIONS",
+                404
+            )
+
+        # Get video metadata
+        metadata = get_video_metadata(video_id)
+
+        doc = {
+            "video_id": video_id,
+            "title": metadata.get("title") or f"Video {video_id}",
+            "channel": metadata.get("channel") or "Unknown",
+            "description": metadata.get("description") or "",
+            "indexed_at": now_iso(),
+            "segments": segments,
+        }
+
+        # Save to database and update index
+        db.upsert(doc)
+        index.upsert_document(doc)
+
+        global last_change_at
+        last_change_at = now_iso()
+
+        return jsonify({
+            "status": "success",
+            "video_id": video_id,
+            "title": doc["title"],
+            "segment_count": len(segments),
+            "segments": segments,
+            "timestamp": last_change_at
+        })
+
+    except Exception as e:
+        return json_error(f"Failed to fetch transcript: {e}", "FETCH_FAILED", 500)
+
+
+@app.get("/api/fetch/<video_id>")
+def api_fetch_get_transcript(video_id: str) -> Any:
+    """
+    GET endpoint to fetch and index a transcript from YouTube.
+    
+    This is useful for the Chrome extension to quickly fetch a video's transcript.
+    """
+    # Check if already indexed
+    existing = db.get_one(video_id)
+    if existing:
+        return jsonify({
+            "status": "already_indexed",
+            "video_id": video_id,
+            "title": existing.get("title"),
+            "segment_count": len(existing.get("segments") or []),
+            "segments": existing.get("segments") or [],
+            "timestamp": now_iso()
+        })
+
+    try:
+        # Fetch captions from YouTube
+        segments = get_captions(video_id)
+        if not segments:
+            return json_error(
+                f"No captions found for video {video_id}.",
+                "NO_CAPTIONS",
+                404
+            )
+
+        # Get video metadata
+        metadata = get_video_metadata(video_id)
+
+        doc = {
+            "video_id": video_id,
+            "title": metadata.get("title") or f"Video {video_id}",
+            "channel": metadata.get("channel") or "Unknown",
+            "description": metadata.get("description") or "",
+            "indexed_at": now_iso(),
+            "segments": segments,
+        }
+
+        # Save to database and update index
+        db.upsert(doc)
+        index.upsert_document(doc)
+
+        global last_change_at
+        last_change_at = now_iso()
+
+        return jsonify({
+            "status": "success",
+            "video_id": video_id,
+            "title": doc["title"],
+            "segment_count": len(segments),
+            "segments": segments,
+            "timestamp": last_change_at
+        })
+
+    except Exception as e:
+        return json_error(f"Failed to fetch transcript: {e}", "FETCH_FAILED", 500)
+
+
+@app.get("/api/search/youtube")
+def api_search_youtube() -> Any:
+    """
+    Search YouTube for videos and return results with transcript availability.
+    
+    Query params:
+      q: search query
+      max_results: max number of results (default 10)
+    """
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        return json_error('Missing required query param "q".', "MISSING_QUERY", 400)
+
+    max_results_raw = request.args.get("max_results")
+    try:
+        max_results = int(max_results_raw) if max_results_raw is not None else 10
+    except ValueError:
+        max_results = 10
+    max_results = max(1, min(20, max_results))
+
+    # For now, search within indexed videos only
+    # In the future, this could integrate with YouTube Data API
+    try:
+        results = index.search(query=q, top_k=max_results)
+    except Exception as e:
+        return json_error(f"Search failed: {e}", "SEARCH_FAILED", 500)
+
+    return jsonify({
+        "query": q,
+        "total_results": len(results),
+        "results": results,
+        "timestamp": now_iso()
+    })
 
 
 if __name__ == "__main__":
