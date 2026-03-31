@@ -129,7 +129,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "FETCH_TRANSCRIPT_BACKEND") {
     fetchVideoTranscript(request.videoId)
       .then((data) => {
-        const segments = (data.data && data.data.segments) || [];
+        const segments =
+          (data && Array.isArray(data.segments) && data.segments) ||
+          (data &&
+            data.data &&
+            Array.isArray(data.data.segments) &&
+            data.data.segments) ||
+          [];
         sendResponse({ segments });
       })
       .catch((err) =>
