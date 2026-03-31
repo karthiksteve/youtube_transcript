@@ -38,7 +38,7 @@
     if (cachedTranscript && cachedTranscript.transcript)
       return cachedTranscript;
 
-    const playerResponse = await waitForPlayerResponse(12000, 250);
+    const playerResponse = await extractPlayerDataRobust(20000);
     if (!playerResponse) {
       throw new Error("Timed out waiting for YouTube player data.");
     }
@@ -166,6 +166,71 @@
     autoIndexTimer = setTimeout(() => {
       autoIndexCurrentVideo();
     }, delayMs);
+  }
+
+  async function extractPlayerDataRobust(timeoutMs = 20000) {
+    const start = Date.now();
+    const stepMs = 200;
+
+    while (Date.now() - start < timeoutMs) {
+      // Method 1: Direct window object
+      if (window.ytInitialPlayerResponse) {
+        return window.ytInitialPlayerResponse;
+      }
+
+      // Method 2: From script tags
+      const fromScript = extractAssignedJsonFromScripts("ytInitialPlayerResponse");
+      if (fromScript) {
+        return fromScript;
+      }
+
+      // Method 3: Try ytInitialData if player response unavailable
+      if (window.ytInitialData && window.ytInitialData.playerOverlays) {
+        const videoId = extractVideoIdFromInitialData(window.ytInitialData);
+        if (videoId) {
+          return {
+            videoDetails: {
+              videoId,
+              title: extractTitleFromInitialData(window.ytInitialData) || "Unknown",
+              author: "Unknown",
+            },
+            captions: { playerCaptionsTracklistRenderer: { captionTracks: [] } },
+          };
+        }
+      }
+
+      // Method 4: Extract from page title as fallback
+      const titleMatch = document.title.match(/^(.+?)\s+-\s+YouTube/);
+      const urlVideoId = getVideoIdFromLocation();
+      if (urlVideoId && titleMatch) {
+        return {
+          videoDetails: {
+            videoId: urlVideoId,
+            title: titleMatch[1],
+            author: "Unknown",
+          },
+          captions: { playerCaptionsTracklistRenderer: { captionTracks: [] } },
+        };
+      }
+
+      await new Promise((r) => setTimeout(r, stepMs));
+    }
+
+    return null;
+  }
+
+  function extractVideoIdFromInitialData(data) {
+    try {
+      return data?.contents?.twoColumnWatchNextResults?.videoPrimary?.videoDetails?.videoId;
+    } catch (e) {}
+    return null;
+  }
+
+  function extractTitleFromInitialData(data) {
+    try {
+      return data?.metadata?.videoMetadata?.title;
+    } catch (e) {}
+    return null;
   }
 
   async function waitForPlayerResponse(timeoutMs, stepMs) {
