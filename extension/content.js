@@ -44,6 +44,7 @@
     }
 
     const videoId = playerResponse?.videoDetails?.videoId;
+    const effectiveVideoId = videoId || getVideoIdFromLocation();
     const channel = playerResponse?.videoDetails?.author || "Unknown";
     const title =
       playerResponse?.videoDetails?.title ||
@@ -61,11 +62,11 @@
     ) {
       try {
         const backendTranscript = await fetchTranscriptFromBackend(
-          videoId,
+          effectiveVideoId,
           title,
         );
         cachedTranscript = backendTranscript;
-        cachedVideoIdForUrl = videoId || null;
+        cachedVideoIdForUrl = effectiveVideoId || null;
         return cachedTranscript;
       } catch (backendErr) {
         throw new Error(
@@ -82,7 +83,19 @@
       ) || captionTracks[0];
 
     if (!track || !track.baseUrl) {
-      throw new Error("Could not resolve caption track URL.");
+      try {
+        const backendTranscript = await fetchTranscriptFromBackend(
+          effectiveVideoId,
+          title,
+        );
+        cachedTranscript = backendTranscript;
+        cachedVideoIdForUrl = effectiveVideoId || null;
+        return cachedTranscript;
+      } catch (backendErr) {
+        throw new Error(
+          "Could not resolve caption track URL and backend fetch failed.",
+        );
+      }
     }
 
     let baseUrl = String(track.baseUrl);
@@ -95,23 +108,42 @@
       baseUrl = baseUrl.replace(/([?&])fmt=[^&]*/i, "$1fmt=xml3");
     }
 
-    const xmlText = await fetch(baseUrl, { credentials: "omit" }).then((r) =>
-      r.text(),
-    );
-    if (!xmlText || !xmlText.includes("<text")) {
-      // Some responses are empty/unexpected; throw with a hint.
-      throw new Error(
-        "Failed to fetch captions XML. Captions may be unavailable for this video.",
+    let transcript = null;
+    try {
+      const xmlText = await fetch(baseUrl, { credentials: "omit" }).then((r) =>
+        r.text(),
       );
+      if (!xmlText || !xmlText.includes("<text")) {
+        throw new Error("Captions XML response was empty or malformed.");
+      }
+
+      transcript = parseTranscriptXml(xmlText);
+      if (!transcript || transcript.length === 0) {
+        throw new Error("Transcript is empty after parsing captions XML.");
+      }
+    } catch (xmlErr) {
+      try {
+        const backendTranscript = await fetchTranscriptFromBackend(
+          effectiveVideoId,
+          title,
+        );
+        cachedTranscript = backendTranscript;
+        cachedVideoIdForUrl = effectiveVideoId || null;
+        return cachedTranscript;
+      } catch (backendErr) {
+        throw new Error(
+          "Failed to fetch captions XML and backend fetch failed. Captions may be unavailable for this video.",
+        );
+      }
     }
 
-    const transcript = parseTranscriptXml(xmlText);
-    if (!transcript || transcript.length === 0) {
-      throw new Error("Transcript is empty after parsing captions XML.");
-    }
-
-    cachedTranscript = { transcript, videoId, title, channel };
-    cachedVideoIdForUrl = videoId || null;
+    cachedTranscript = {
+      transcript,
+      videoId: effectiveVideoId,
+      title,
+      channel,
+    };
+    cachedVideoIdForUrl = effectiveVideoId || null;
     return cachedTranscript;
   }
 
