@@ -53,14 +53,25 @@
     const captionTracks =
       playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
 
+    // If captions not found on page, fallback to backend fetch
     if (
       !captionTracks ||
       !Array.isArray(captionTracks) ||
       captionTracks.length === 0
     ) {
-      throw new Error(
-        "No caption tracks found. Turn on subtitles for this video.",
-      );
+      try {
+        const backendTranscript = await fetchTranscriptFromBackend(
+          videoId,
+          title,
+        );
+        cachedTranscript = backendTranscript;
+        cachedVideoIdForUrl = videoId || null;
+        return cachedTranscript;
+      } catch (backendErr) {
+        throw new Error(
+          "No caption tracks found on page and backend fetch failed. Try another video.",
+        );
+      }
     }
 
     const track =
@@ -116,6 +127,36 @@
     if (embed && embed[1]) return embed[1];
 
     return null;
+  }
+
+  async function fetchTranscriptFromBackend(videoId, title) {
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(
+        { action: "FETCH_TRANSCRIPT_BACKEND", videoId },
+        (response) => {
+          if (!response)
+            return reject(new Error("No response from background"));
+          if (response.error) return reject(new Error(response.error));
+
+          // Parse response and normalize to transcript format
+          const segments = (response.segments || []).map((seg) => ({
+            time: Number(seg.time) || 0,
+            text: String(seg.text || ""),
+          }));
+
+          if (!segments || segments.length === 0) {
+            return reject(new Error("No segments returned from backend"));
+          }
+
+          resolve({
+            transcript: segments,
+            videoId,
+            title: title || `Video ${videoId}`,
+            channel: "Unknown",
+          });
+        },
+      );
+    });
   }
 
   async function autoIndexCurrentVideo() {
@@ -179,7 +220,9 @@
       }
 
       // Method 2: From script tags
-      const fromScript = extractAssignedJsonFromScripts("ytInitialPlayerResponse");
+      const fromScript = extractAssignedJsonFromScripts(
+        "ytInitialPlayerResponse",
+      );
       if (fromScript) {
         return fromScript;
       }
@@ -191,10 +234,13 @@
           return {
             videoDetails: {
               videoId,
-              title: extractTitleFromInitialData(window.ytInitialData) || "Unknown",
+              title:
+                extractTitleFromInitialData(window.ytInitialData) || "Unknown",
               author: "Unknown",
             },
-            captions: { playerCaptionsTracklistRenderer: { captionTracks: [] } },
+            captions: {
+              playerCaptionsTracklistRenderer: { captionTracks: [] },
+            },
           };
         }
       }
@@ -221,7 +267,8 @@
 
   function extractVideoIdFromInitialData(data) {
     try {
-      return data?.contents?.twoColumnWatchNextResults?.videoPrimary?.videoDetails?.videoId;
+      return data?.contents?.twoColumnWatchNextResults?.videoPrimary
+        ?.videoDetails?.videoId;
     } catch (e) {}
     return null;
   }

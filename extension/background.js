@@ -125,4 +125,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .catch((err) => sendResponse({ success: false, error: err.message }));
     return true;
   }
+
+  if (request.action === "FETCH_TRANSCRIPT_BACKEND") {
+    fetchVideoTranscript(request.videoId)
+      .then((data) => {
+        const segments = data.segments || [];
+        sendResponse({ segments });
+      })
+      .catch((err) =>
+        sendResponse({ error: err.message || "Backend fetch failed" }),
+      );
+    return true;
+  }
 });
