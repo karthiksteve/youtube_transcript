@@ -228,7 +228,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const quickQueriesByMode = {
     current: ["definition", "example", "algorithm", "advantages", "conclusion"],
-    all: ["machine learning", "database", "neural network", "python", "project"],
+    all: [
+      "machine learning",
+      "database",
+      "neural network",
+      "python",
+      "project",
+    ],
   };
 
   function formatScore(score) {
@@ -245,7 +251,8 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const queries = quickQueriesByMode[currentMode] || quickQueriesByMode.current;
+    const queries =
+      quickQueriesByMode[currentMode] || quickQueriesByMode.current;
     quickRow.innerHTML = queries
       .map(
         (q) =>
@@ -292,6 +299,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  async function ensureContentScript(tabId) {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ["content.js"],
+      });
+    } catch (e) {
+      // Ignore and let follow-up messaging surface a useful error.
+    }
+  }
+
   async function loadCurrent() {
     const [tab] = await chrome.tabs.query({
       active: true,
@@ -301,9 +319,23 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!String(tab.url).includes("youtube.com"))
       throw new Error("Open a YouTube video page first.");
 
-    const response = await sendMessageWithRetry(tab.id, {
-      action: "GET_TRANSCRIPT",
-    });
+    let response;
+    try {
+      response = await sendMessageWithRetry(tab.id, {
+        action: "GET_TRANSCRIPT",
+      });
+    } catch (e) {
+      const msg = String(e?.message || e || "");
+      const missingReceiver = /Receiving end does not exist/i.test(msg);
+      if (!missingReceiver) throw e;
+
+      // Common after extension reload/update: inject and retry once.
+      await ensureContentScript(tab.id);
+      response = await sendMessageWithRetry(tab.id, {
+        action: "GET_TRANSCRIPT",
+      });
+    }
+
     if (!response || response.error)
       throw new Error(response?.error || "Failed to load transcript.");
 

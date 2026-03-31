@@ -3,7 +3,7 @@
   "name": "YouTube Transcript Search",
   "version": "2.0",
   "description": "Search YouTube transcripts by keyword and jump to exact timestamps.",
-  "permissions": ["activeTab", "storage", "tabs"],
+  "permissions": ["activeTab", "storage", "tabs", "scripting"],
   "host_permissions": [
     "*://*.youtube.com/*",
     "http://localhost:5000/*",
@@ -27,4 +27,3 @@
     }
   ]
 }
-
