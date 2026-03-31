@@ -1,7 +1,9 @@
 const DEFAULT_API_BASE = "http://localhost:5000";
 
 async function getApiBase() {
-  const { apiBase } = await chrome.storage.sync.get({ apiBase: DEFAULT_API_BASE });
+  const { apiBase } = await chrome.storage.sync.get({
+    apiBase: DEFAULT_API_BASE,
+  });
   let base = typeof apiBase === "string" ? apiBase.trim() : DEFAULT_API_BASE;
   if (!base) base = DEFAULT_API_BASE;
   return base.replace(/\/$/, "");
@@ -35,7 +37,11 @@ async function updateBadge() {
 }
 
 async function searchAllVideos(query, channel, limit) {
-  const url = await apiUrl(`/api/search?q=${encodeURIComponent(query)}` + (channel ? `&channel=${encodeURIComponent(channel)}` : "") + (limit ? `&limit=${encodeURIComponent(limit)}` : ""));
+  const url = await apiUrl(
+    `/api/search?q=${encodeURIComponent(query)}` +
+      (channel ? `&channel=${encodeURIComponent(channel)}` : "") +
+      (limit ? `&limit=${encodeURIComponent(limit)}` : ""),
+  );
   const res = await fetch(url);
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(payload.error || `HTTP ${res.status}`);
@@ -43,7 +49,10 @@ async function searchAllVideos(query, channel, limit) {
 }
 
 async function searchVideoSegments(videoId, query, limit) {
-  const url = await apiUrl(`/api/video/${encodeURIComponent(videoId)}/search?q=${encodeURIComponent(query)}` + (limit ? `&limit=${encodeURIComponent(limit)}` : ""));
+  const url = await apiUrl(
+    `/api/video/${encodeURIComponent(videoId)}/search?q=${encodeURIComponent(query)}` +
+      (limit ? `&limit=${encodeURIComponent(limit)}` : ""),
+  );
   const res = await fetch(url);
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(payload.error || `HTTP ${res.status}`);
@@ -57,6 +66,14 @@ async function indexVideoDoc(doc) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(doc),
   });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(payload.error || `HTTP ${res.status}`);
+  return payload;
+}
+
+async function fetchVideoTranscript(videoId) {
+  const url = await apiUrl(`/api/fetch/${encodeURIComponent(videoId)}`);
+  const res = await fetch(url);
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(payload.error || `HTTP ${res.status}`);
   return payload;
@@ -94,5 +111,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .catch((err) => sendResponse({ success: false, error: err.message }));
     return true;
   }
-});
 
+  if (request.action === "AUTO_INDEX_VIDEO") {
+    indexVideoDoc(request.doc)
+      .then(() => sendResponse({ success: true }))
+      .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  if (request.action === "FETCH_VIDEO") {
+    fetchVideoTranscript(request.videoId)
+      .then((data) => sendResponse({ success: true, data }))
+      .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+});
