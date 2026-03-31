@@ -20,11 +20,19 @@
     <div class="tabs" role="tablist" aria-label="Search mode">
       <button class="tab-btn active" type="button" data-mode="current" role="tab" aria-selected="true">Current video</button>
       <button class="tab-btn" type="button" data-mode="all" role="tab" aria-selected="false">Search all</button>
+      <button class="tab-btn" type="button" data-mode="fetch" role="tab" aria-selected="false">Fetch video</button>
     </div>
 
-    <div class="search-row">
+    <div class="search-row" id="searchRow">
       <input id="query" type="text" placeholder="Search transcript..." autocomplete="off" />
       <button id="searchBtn" class="search-btn" type="button" aria-label="Search">Search</button>
+    </div>
+
+    <div class="quick-row" id="quickRow" aria-label="Suggested queries"></div>
+
+    <div class="fetch-row" id="fetchRow" style="display: none;">
+      <input id="videoUrl" type="text" placeholder="Paste YouTube URL or video ID..." autocomplete="off" />
+      <button id="fetchBtn" class="search-btn" type="button" aria-label="Fetch transcript">Fetch</button>
     </div>
 
     <div class="meta-row">
@@ -36,4 +44,3 @@
     <script src="popup.js"></script>
   </body>
 </html>
-

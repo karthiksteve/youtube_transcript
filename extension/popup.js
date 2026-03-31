@@ -20,20 +20,127 @@ function formatTime(seconds) {
 }
 
 const STOP_WORDS = new Set([
-  "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you",
-  "you're", "you've", "you'll", "you'd", "your", "yours", "yourself",
-  "yourselves", "he", "him", "his", "she", "her", "it", "its", "they",
-  "them", "their", "theirs", "what", "which", "who", "whom", "this",
-  "that", "these", "those", "a", "an", "the", "and", "but", "if", "or",
-  "because", "as", "until", "while", "of", "at", "by", "for", "with",
-  "about", "against", "between", "into", "through", "during", "before",
-  "after", "above", "below", "to", "from", "up", "down", "in", "out",
-  "on", "off", "over", "under", "again", "further", "then", "once",
-  "here", "there", "when", "where", "why", "how", "all", "any", "each",
-  "few", "more", "most", "other", "some", "such", "no", "nor", "not",
-  "only", "own", "same", "so", "than", "too", "very", "can", "will",
-  "just", "don", "don't", "should", "now", "d", "ll", "m", "o", "re",
-  "ve", "y", "aren", "isn", "wasn", "weren", "won", "wouldn",
+  "i",
+  "me",
+  "my",
+  "myself",
+  "we",
+  "our",
+  "ours",
+  "ourselves",
+  "you",
+  "you're",
+  "you've",
+  "you'll",
+  "you'd",
+  "your",
+  "yours",
+  "yourself",
+  "yourselves",
+  "he",
+  "him",
+  "his",
+  "she",
+  "her",
+  "it",
+  "its",
+  "they",
+  "them",
+  "their",
+  "theirs",
+  "what",
+  "which",
+  "who",
+  "whom",
+  "this",
+  "that",
+  "these",
+  "those",
+  "a",
+  "an",
+  "the",
+  "and",
+  "but",
+  "if",
+  "or",
+  "because",
+  "as",
+  "until",
+  "while",
+  "of",
+  "at",
+  "by",
+  "for",
+  "with",
+  "about",
+  "against",
+  "between",
+  "into",
+  "through",
+  "during",
+  "before",
+  "after",
+  "above",
+  "below",
+  "to",
+  "from",
+  "up",
+  "down",
+  "in",
+  "out",
+  "on",
+  "off",
+  "over",
+  "under",
+  "again",
+  "further",
+  "then",
+  "once",
+  "here",
+  "there",
+  "when",
+  "where",
+  "why",
+  "how",
+  "all",
+  "any",
+  "each",
+  "few",
+  "more",
+  "most",
+  "other",
+  "some",
+  "such",
+  "no",
+  "nor",
+  "not",
+  "only",
+  "own",
+  "same",
+  "so",
+  "than",
+  "too",
+  "very",
+  "can",
+  "will",
+  "just",
+  "don",
+  "don't",
+  "should",
+  "now",
+  "d",
+  "ll",
+  "m",
+  "o",
+  "re",
+  "ve",
+  "y",
+  "aren",
+  "isn",
+  "wasn",
+  "weren",
+  "won",
+  "wouldn",
 ]);
 
 function tokenize(text) {
@@ -75,10 +182,10 @@ function sendMessageWithRetry(tabId, message, attempts = 20, delayMs = 250) {
 function extractVideoId(input) {
   if (!input) return null;
   const s = String(input).trim();
-  
+
   // Direct video ID (11 characters)
   if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
-  
+
   // YouTube URLs
   const patterns = [
     /[?&]v=([a-zA-Z0-9_-]{11})/,
@@ -86,12 +193,12 @@ function extractVideoId(input) {
     /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
     /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
   ];
-  
+
   for (const pattern of patterns) {
     const match = s.match(pattern);
     if (match) return match[1];
   }
-  
+
   return null;
 }
 
@@ -102,6 +209,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const matchCountEl = document.getElementById("matchCount");
   const fetchRow = document.getElementById("fetchRow");
   const searchRow = document.getElementById("searchRow");
+  const quickRow = document.getElementById("quickRow");
   const videoUrlEl = document.getElementById("videoUrl");
   const fetchBtn = document.getElementById("fetchBtn");
 
@@ -117,6 +225,49 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentTranscript = null;
   let currentVideoId = null;
   let currentVideoTitle = null;
+
+  const quickQueriesByMode = {
+    current: ["definition", "example", "algorithm", "advantages", "conclusion"],
+    all: ["machine learning", "database", "neural network", "python", "project"],
+  };
+
+  function formatScore(score) {
+    const n = Number(score);
+    if (!Number.isFinite(n) || n <= 0) return "0.000";
+    return n.toFixed(3);
+  }
+
+  function renderQuickQueries() {
+    if (!quickRow) return;
+    if (currentMode === "fetch") {
+      quickRow.innerHTML = "";
+      quickRow.style.display = "none";
+      return;
+    }
+
+    const queries = quickQueriesByMode[currentMode] || quickQueriesByMode.current;
+    quickRow.innerHTML = queries
+      .map(
+        (q) =>
+          `<button class="quick-chip" type="button" data-query="${escapeHtml(q)}">${escapeHtml(q)}</button>`,
+      )
+      .join("");
+    quickRow.style.display = "flex";
+  }
+
+  function renderContext(context, terms) {
+    if (!context || typeof context !== "object") return "";
+    const before = String(context.before || "").trim();
+    const after = String(context.after || "").trim();
+    let out = "";
+    if (before) {
+      out += `<div class="context-line"><span class="context-label">Before:</span>${highlightText(before, terms)}</div>`;
+    }
+    if (after) {
+      out += `<div class="context-line"><span class="context-label">After:</span>${highlightText(after, terms)}</div>`;
+    }
+    return out;
+  }
 
   function setApiStatus(online) {
     apiPill.classList.remove("online", "offline");
@@ -142,12 +293,19 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function loadCurrent() {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
     if (!tab?.id || !tab?.url) throw new Error("No active tab.");
-    if (!String(tab.url).includes("youtube.com")) throw new Error("Open a YouTube video page first.");
+    if (!String(tab.url).includes("youtube.com"))
+      throw new Error("Open a YouTube video page first.");
 
-    const response = await sendMessageWithRetry(tab.id, { action: "GET_TRANSCRIPT" });
-    if (!response || response.error) throw new Error(response?.error || "Failed to load transcript.");
+    const response = await sendMessageWithRetry(tab.id, {
+      action: "GET_TRANSCRIPT",
+    });
+    if (!response || response.error)
+      throw new Error(response?.error || "Failed to load transcript.");
 
     currentTranscript = response.transcript || [];
     currentVideoId = response.videoId || null;
@@ -155,7 +313,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function indexCurrentVideoToBackend() {
-    if (!currentVideoId || !Array.isArray(currentTranscript) || currentTranscript.length === 0) {
+    if (
+      !currentVideoId ||
+      !Array.isArray(currentTranscript) ||
+      currentTranscript.length === 0
+    ) {
       throw new Error("Could not read transcript from current video.");
     }
 
@@ -171,15 +333,19 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     if (!response?.success) {
-      throw new Error(response?.error || "Failed to index current video transcript.");
+      throw new Error(
+        response?.error || "Failed to index current video transcript.",
+      );
     }
   }
 
   async function searchCurrentVideoViaApi(query) {
-    if (!apiAvailable) throw new Error("Backend offline. Start the Flask server.");
+    if (!apiAvailable)
+      throw new Error("Backend offline. Start the Flask server.");
 
     await loadCurrent();
-    if (!currentVideoId) throw new Error("Could not detect current YouTube video ID.");
+    if (!currentVideoId)
+      throw new Error("Could not detect current YouTube video ID.");
 
     await indexCurrentVideoToBackend();
 
@@ -201,7 +367,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const qTerms = tokenize(query);
     if (!qTerms.length) return [];
 
-    const qLower = String(query || "").toLowerCase().trim();
+    const qLower = String(query || "")
+      .toLowerCase()
+      .trim();
     const scored = currentTranscript
       .map((seg) => {
         const text = String(seg.text || "");
@@ -226,7 +394,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderCurrentResults(results, query) {
     resultsEl.innerHTML = "";
-    matchCountEl.textContent = results.length ? `${results.length} match(es)` : "";
+    matchCountEl.textContent = results.length
+      ? `${results.length} match(es) in current video`
+      : "";
 
     if (!results.length) {
       resultsEl.innerHTML = '<div class="error">No matches found</div>';
@@ -236,7 +406,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const terms = tokenize(query);
     for (const seg of results) {
       const ts = formatTime(seg.time);
-      const jumpUrl = currentVideoId ? `https://www.youtube.com/watch?v=${currentVideoId}&t=${Math.floor(seg.time)}s` : "#";
+      const jumpUrl = currentVideoId
+        ? `https://www.youtube.com/watch?v=${currentVideoId}&t=${Math.floor(seg.time)}s`
+        : "#";
 
       const block = document.createElement("div");
       block.className = "result-block";
@@ -246,8 +418,10 @@ document.addEventListener("DOMContentLoaded", () => {
           <a href="${escapeHtml(jumpUrl)}" target="_blank" rel="noopener" class="ts" data-jump="${escapeHtml(String(seg.time))}">
             ${escapeHtml(ts)}
           </a>
+          <span class="score-pill">Relevance ${escapeHtml(formatScore(seg.score))}</span>
         </div>
         <div class="seg-text">${highlightText(seg.text, terms)}</div>
+        ${renderContext(seg.context, terms)}
       `;
 
       const tsLink = block.querySelector("[data-jump]");
@@ -255,9 +429,14 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         e.stopPropagation();
 
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const [tab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
         if (!tab?.id) return;
-        chrome.tabs.sendMessage(tab.id, { action: "JUMP_TO_TIME", time: seg.time }).catch(() => {});
+        chrome.tabs
+          .sendMessage(tab.id, { action: "JUMP_TO_TIME", time: seg.time })
+          .catch(() => {});
       });
 
       resultsEl.appendChild(block);
@@ -265,13 +444,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function searchAll(query) {
-    if (!apiAvailable) throw new Error("Backend offline. Start the Flask server.");
+    if (!apiAvailable)
+      throw new Error("Backend offline. Start the Flask server.");
     const response = await chrome.runtime.sendMessage({
       action: "SEARCH",
       query,
       limit: 20,
     });
-    if (!response?.success) throw new Error(response?.error || "Search failed.");
+    if (!response?.success)
+      throw new Error(response?.error || "Search failed.");
     return response.data;
   }
 
@@ -280,7 +461,9 @@ document.addEventListener("DOMContentLoaded", () => {
     resultsEl.innerHTML = "";
     const terms = tokenize(query);
 
-    matchCountEl.textContent = results.length ? `${results.length} video(s) found` : "";
+    matchCountEl.textContent = results.length
+      ? `${results.length} video(s) found`
+      : "";
 
     if (!results.length) {
       resultsEl.innerHTML = '<div class="error">No videos found</div>';
@@ -300,8 +483,10 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="seg-item">
               <div class="seg-top">
                 <div class="ts">${escapeHtml(ts)}</div>
+                <span class="score-pill">Seg ${escapeHtml(formatScore(seg.score))}</span>
               </div>
               <div class="seg-text">${highlightText(seg.text, terms)}</div>
+              ${renderContext(seg.context, terms)}
               <div class="actions">
                 <a class="mini-btn primary" href="${escapeHtml(jumpUrl)}" target="_blank" rel="noopener">Jump</a>
                 <button class="mini-btn" type="button" data-copy="${escapeHtml(jumpUrl)}">Copy link</button>
@@ -318,7 +503,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="video-title">
               <a href="${escapeHtml(video.url)}" target="_blank" rel="noopener">${escapeHtml(video.title || "")}</a>
             </div>
-            <div class="video-meta">Channel: ${escapeHtml(video.channel || "Unknown")}</div>
+            <div class="video-meta">Channel: ${escapeHtml(video.channel || "Unknown")} | Score: ${escapeHtml(formatScore(video.document_score))}</div>
             ${segHtml}
           </div>
         </div>
@@ -352,7 +537,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const videoId = extractVideoId(urlInput);
     if (!videoId) throw new Error("Invalid YouTube URL or video ID.");
 
-    resultsEl.innerHTML = '<div class="loading">Fetching transcript from YouTube...</div>';
+    resultsEl.innerHTML =
+      '<div class="loading">Fetching transcript from YouTube...</div>';
     matchCountEl.textContent = "";
 
     try {
@@ -374,9 +560,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderFetchResult(data, videoId) {
     resultsEl.innerHTML = "";
-    
+
     if (!data.segments || data.segments.length === 0) {
-      resultsEl.innerHTML = '<div class="error">No transcript found for this video.</div>';
+      resultsEl.innerHTML =
+        '<div class="error">No transcript found for this video.</div>';
       return;
     }
 
@@ -458,14 +645,18 @@ document.addEventListener("DOMContentLoaded", () => {
       if (currentMode === "fetch") {
         searchRow.style.display = "none";
         fetchRow.style.display = "flex";
-        resultsEl.innerHTML = '<div class="placeholder">Enter a YouTube URL to fetch its transcript.</div>';
+        quickRow.style.display = "none";
+        resultsEl.innerHTML =
+          '<div class="placeholder">Enter a YouTube URL to fetch its transcript.</div>';
       } else {
         searchRow.style.display = "flex";
         fetchRow.style.display = "none";
+        renderQuickQueries();
         if (currentMode === "current") {
-          resultsEl.innerHTML = '<div class="placeholder">Load a transcript to search.</div>';
+          resultsEl.innerHTML =
+            '<div class="placeholder">Load a transcript to search.</div>';
         } else {
-          resultsEl.innerHTML = apiAvailable 
+          resultsEl.innerHTML = apiAvailable
             ? '<div class="placeholder">Type to search your indexed library.</div>'
             : '<div class="error">Backend offline. Start the Flask server.</div>';
         }
@@ -478,13 +669,22 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Enter") runSearch();
   });
 
+  quickRow.addEventListener("click", (e) => {
+    const target = e.target.closest("[data-query]");
+    if (!target) return;
+    queryEl.value = target.getAttribute("data-query") || "";
+    runSearch();
+  });
+
   fetchBtn.addEventListener("click", () => fetchVideoTranscript());
   videoUrlEl.addEventListener("keypress", (e) => {
     if (e.key === "Enter") fetchVideoTranscript();
   });
 
   checkApi();
+  renderQuickQueries();
 
   // initial placeholder
-  resultsEl.innerHTML = '<div class="placeholder">Type to search in the current video.</div>';
+  resultsEl.innerHTML =
+    '<div class="placeholder">Type to search in the current video.</div>';
 });
