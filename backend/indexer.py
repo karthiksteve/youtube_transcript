@@ -3,12 +3,13 @@ from __future__ import annotations
 import os
 import re
 import time
-import xml.etree.ElementTree as ET
 import html
-from typing import Any, Dict, List, Optional, Tuple
+import json
+from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
 import requests
+from youtube_transcript_api import YouTubeTranscriptApi
 
 from db import TranscriptsDB
 from search import TFIDFIndex
@@ -20,6 +21,9 @@ DB_PATH = os.path.join(DATA_DIR, "transcripts.sqlite3")
 
 YOUTUBE_WATCH_RE = re.compile(r"[?&]v=([a-zA-Z0-9_-]{11})")
 YOUTUBE_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{11}$")
+
+# Global transcript API instance
+_transcript_api = YouTubeTranscriptApi()
 
 
 def extract_video_id(url_or_id: str) -> Optional[str]:
@@ -79,108 +83,31 @@ def _fetch_text(url: str, timeout_s: int = 15) -> str:
     return res.text
 
 
-def _parse_timedtext_xml(xml_text: str) -> List[Dict[str, Any]]:
-    """
-    Parse YouTube caption XML into [{"time": float, "text": str}]
-    """
-    segments: List[Dict[str, Any]] = []
-    try:
-        root = ET.fromstring(xml_text)
-    except ET.ParseError:
-        # Some responses may be wrapped or empty. Best-effort fallback.
-        return segments
-
-    # timedtext XML uses <text start="0.0">...</text>
-    for node in root.iter():
-        if not node.tag.endswith("text"):
-            continue
-        start_attr = node.attrib.get("start")
-        if start_attr is None:
-            continue
-        try:
-            t = float(start_attr)
-        except ValueError:
-            t = 0.0
-        text_raw = "".join(node.itertext())
-        text_clean = html.unescape(text_raw or "").replace("\n", " ").strip()
-        text_clean = re.sub(r"\s+", " ", text_clean)
-        if text_clean:
-            segments.append({"time": t, "text": text_clean})
-
-    segments.sort(key=lambda s: s["time"])
-    return segments
-
-
-def _parse_timedtext_json(json_text: str) -> List[Dict[str, Any]]:
-    """
-    Best-effort JSON3 parsing into [{"time": float, "text": str}]
-    """
-    import json
-
-    try:
-        payload = json.loads(json_text)
-    except json.JSONDecodeError:
-        return []
-
-    segments: List[Dict[str, Any]] = []
-    for ev in payload.get("events") or []:
-        segs = ev.get("segs")
-        if not segs:
-            continue
-        t_start_ms = ev.get("tStartMs") or 0
-        try:
-            t = float(t_start_ms) / 1000.0
-        except (TypeError, ValueError):
-            t = 0.0
-
-        line = ""
-        for seg in segs:
-            if "utf8" in seg:
-                line += str(seg["utf8"])
-        line = html.unescape(line).replace("\n", " ")
-        line = re.sub(r"\s+", " ", line).strip()
-        if line:
-            segments.append({"time": t, "text": line})
-
-    segments.sort(key=lambda s: s["time"])
-    return segments
-
-
 def get_captions(video_id: str) -> List[Dict[str, Any]]:
     """
-    Scrape captions from YouTube's internal timedtext API.
-    Prefers XML parsing (as required), with JSON3 fallback.
+    Fetch captions from YouTube using youtube-transcript-api.
+    Returns list of segments with 'time' and 'text' keys.
     """
-    timedtext_xml_urls = [
-        f"https://www.youtube.com/api/timedtext?lang=en&v={video_id}&fmt=xml3&kind=asr",
-        f"https://www.youtube.com/api/timedtext?lang=en&v={video_id}&fmt=xml3",
-    ]
-    for url in timedtext_xml_urls:
-        try:
-            xml_text = _fetch_text(url)
-            if "<text" in xml_text:
-                segments = _parse_timedtext_xml(xml_text)
-                if segments:
-                    return segments
-        except Exception:
-            continue
-
-    # JSON fallback
-    timedtext_json_urls = [
-        f"https://www.youtube.com/api/timedtext?lang=en&v={video_id}&fmt=json3&kind=asr",
-        f"https://www.youtube.com/api/timedtext?lang=en&v={video_id}&fmt=json3",
-    ]
-    for url in timedtext_json_urls:
-        try:
-            json_text = _fetch_text(url)
-            if "events" in json_text:
-                segments = _parse_timedtext_json(json_text)
-                if segments:
-                    return segments
-        except Exception:
-            continue
-
-    return []
+    try:
+        transcript = _transcript_api.fetch(video_id)
+        
+        segments = []
+        for snippet in transcript:
+            # Clean up the text
+            text = snippet.text.replace('\n', ' ').strip()
+            text = re.sub(r'\s+', ' ', text)
+            text = html.unescape(text)
+            
+            if text:
+                segments.append({
+                    "time": float(snippet.start),
+                    "text": text
+                })
+        
+        return segments
+    except Exception as e:
+        print(f"Failed to fetch transcript: {e}")
+        return []
 
 
 def _parse_title_from_html(html_text: str) -> str:
@@ -214,10 +141,6 @@ def _parse_channel_from_html(html_text: str) -> str:
     if m2:
         return html.unescape(m2.group(1)).strip()
 
-    m3 = re.search(r'"channelId"\s*:\s*"([^"]+)"', html_text)
-    if m3:
-        return "Unknown"
-
     return "Unknown"
 
 
@@ -244,11 +167,14 @@ def get_video_metadata(video_id: str, api_key: str = "") -> Dict[str, str]:
             "description": (snippet.get("description") or "")[:2000],
         }
 
-    watch_html = _fetch_text(f"https://www.youtube.com/watch?v={video_id}")
-    title = _parse_title_from_html(watch_html)
-    channel = _parse_channel_from_html(watch_html)
-    description = _parse_description_from_html(watch_html)
-    return {"title": title, "channel": channel, "description": description}
+    try:
+        watch_html = _fetch_text(f"https://www.youtube.com/watch?v={video_id}")
+        title = _parse_title_from_html(watch_html)
+        channel = _parse_channel_from_html(watch_html)
+        description = _parse_description_from_html(watch_html)
+        return {"title": title, "channel": channel, "description": description}
+    except Exception:
+        return {"title": f"Video {video_id}", "channel": "Unknown", "description": ""}
 
 
 def index_video(video_url_or_id: str, api_key: str = "") -> Dict[str, Any]:
@@ -391,4 +317,3 @@ if __name__ == "__main__":
     else:
         doc = index_video(args.input, api_key=args.api_key)
         print(f"Indexed: {doc['title']} ({len(doc.get('segments') or [])} segments)")
-

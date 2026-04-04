@@ -24,13 +24,23 @@ body {
   flex-direction: column;
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    Arial,
+    sans-serif;
 }
 
 .header {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, rgba(31, 31, 31, 1) 0%, rgba(15, 15, 16, 1) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(31, 31, 31, 1) 0%,
+    rgba(15, 15, 16, 1) 100%
+  );
 }
 
 .title-row {
@@ -93,7 +103,9 @@ body {
   cursor: pointer;
   font-weight: 700;
   font-size: 12px;
-  transition: background-color 0.15s, border-color 0.15s;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
 }
 
 .tab-btn.active {
@@ -350,4 +362,3 @@ body {
   color: var(--ok);
   border: 1px solid rgba(46, 164, 79, 0.3);
 }
-
